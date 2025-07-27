@@ -1,4 +1,2 @@
 python-telegram-bot
 yt-dlp
-Flask[async]
-gunicorn
