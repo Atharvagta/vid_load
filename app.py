@@ -39,13 +39,18 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(welcome_message, parse_mode=ParseMode.MARKDOWN)
 
 async def handle_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    url = update.message.text.strip()
+    # --- THIS IS THE CORRECTED PART ---
+    # We split the message text and take the last part.
+    # This ensures that even if a command like "/video <url>" is used, we only get the URL.
+    url = update.message.text.strip().split()[-1]
+    # --- END OF CORRECTION ---
+    
     chat_id = update.message.chat_id
     
     processing_msg = await context.bot.send_message(chat_id=chat_id, text="🔎 Analyzing link...")
 
     try:
-        with yt_dlp.YoutubeDL({'quiet': True, 'skip_download': True}) as ydl:
+        with yt_dlp.YoutubeDL({'quiet': True, 'skip_download': True, 'default_search': 'auto'}) as ydl:
             info = ydl.extract_info(url, download=False)
         
         context.user_data['video_info'] = info
@@ -54,7 +59,7 @@ async def handle_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard = []
         if video_formats:
             for fmt in video_formats:
-                size_mb = fmt['filesize'] / (1024 * 1024)
+                size_mb = fmt.get('filesize', 0) / (1024 * 1024)
                 button_text = f"📹 {fmt['height']}p ({size_mb:.1f} MB)"
                 keyboard.append([InlineKeyboardButton(button_text, callback_data=str(fmt['height']))])
         
@@ -126,23 +131,17 @@ def main() -> None:
     """Run the bot."""
     application = Application.builder().token(TOKEN).build()
 
-    # Add handlers
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(MessageHandler(filters.TEXT & filters.Entity('url'), handle_link))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_link))
     application.add_handler(CallbackQueryHandler(button_handler))
 
-    # Get port and webhook URL from Render environment variables
     PORT = int(os.environ.get('PORT', '8443'))
-    # RENDER_EXTERNAL_URL is the an environment variable set by Render.
     WEBHOOK_URL = os.environ.get('RENDER_EXTERNAL_URL')
 
     if not WEBHOOK_URL:
         logger.error("RENDER_EXTERNAL_URL not set!")
         return
         
-    # Run the bot in webhook mode
-    # The url_path is a secret path that only you and Telegram should know.
-    # We use the bot token as the path, which is a common and secure practice.
     application.run_webhook(
         listen="0.0.0.0",
         port=PORT,
