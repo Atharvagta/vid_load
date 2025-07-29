@@ -39,20 +39,33 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(welcome_message, parse_mode=ParseMode.MARKDOWN)
 
 async def handle_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # --- THIS IS THE CORRECTED PART ---
-    # We split the message text and take the last part.
-    # This ensures that even if a command like "/video <url>" is used, we only get the URL.
     url = update.message.text.strip().split()[-1]
-    # --- END OF CORRECTION ---
-    
     chat_id = update.message.chat_id
     
     processing_msg = await context.bot.send_message(chat_id=chat_id, text="🔎 Analyzing link...")
 
     try:
-        with yt_dlp.YoutubeDL({'quiet': True, 'skip_download': True, 'default_search': 'auto'}) as ydl:
+        # --- THIS IS THE IMPROVED PART ---
+        # Add a user-agent to look more like a real browser
+        # and tell yt-dlp to ignore errors that are not critical.
+        ydl_opts = {
+            'quiet': True,
+            'skip_download': True,
+            'default_search': 'auto',
+            'ignoreerrors': True,
+            'http_headers': {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36'
+            }
+        }
+        # --- END OF IMPROVEMENT ---
+        
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
         
+        # Check if yt-dlp failed to get info
+        if not info:
+            raise ValueError("Could not extract video information. The video may be private, deleted, or region-locked.")
+
         context.user_data['video_info'] = info
         video_formats = filter_video_formats(info.get('formats', []))
         
